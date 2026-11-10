@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2e7d32">
+  <title>ゴルフ練習記録</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <!-- 入力画面 -->
+    <section id="view-input" class="view active">
+      <div id="edit-banner" class="edit-banner" hidden>
+        <span id="edit-label">記録を修正中</span>
+        <button id="btn-cancel-edit" type="button">やめる</button>
+      </div>
+
+      <div class="block">
+        <div class="label">クラブ</div>
+        <div id="club-grid" class="club-grid"></div>
+      </div>
+
+      <div class="block canvas-wrap">
+        <canvas id="traj" class="traj"></canvas>
+        <div id="shape-text" class="shape-text">ストレート</div>
+      </div>
+
+      <div class="block controls">
+        <div class="axis-row">
+          <button type="button" class="axis-btn" data-axis="start" data-dir="-1">プル<br><small>左へ出る</small><span class="dots"></span></button>
+          <button type="button" class="axis-btn" data-axis="start" data-dir="1">プッシュ<br><small>右へ出る</small><span class="dots"></span></button>
+        </div>
+        <div class="axis-row">
+          <button type="button" class="axis-btn" data-axis="curve" data-dir="-1">フック<br><small>左へ曲がる</small><span class="dots"></span></button>
+          <button type="button" class="axis-btn" data-axis="curve" data-dir="1">スライス<br><small>右へ曲がる</small><span class="dots"></span></button>
+        </div>
+        <div class="axis-row">
+          <button type="button" class="axis-btn" data-axis="height" data-dir="-1">低い<span class="dots"></span></button>
+          <button type="button" class="axis-btn" data-axis="height" data-dir="1">高い<span class="dots"></span></button>
+        </div>
+        <button type="button" id="btn-reset" class="reset-btn">リセット</button>
+      </div>
+
+      <div class="block save-row">
+        <label class="dist">
+          <input id="distance" type="number" inputmode="numeric" min="0" max="400" placeholder="飛距離">
+          <span>yd</span>
+        </label>
+        <button type="button" id="btn-save" class="save-btn">保存</button>
+      </div>
+      <div id="toast" class="toast" hidden></div>
+    </section>
+
+    <!-- 一覧画面 -->
+    <section id="view-list" class="view">
+      <div class="list-head">
+        <span id="list-count">0球</span>
+        <button type="button" id="btn-csv">CSV書き出し</button>
+      </div>
+      <ul id="record-list" class="record-list"></ul>
+      <p id="list-empty" class="empty">まだ記録がありません</p>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button type="button" class="tab active" data-view="input">入力</button>
+    <button type="button" class="tab" data-view="list">一覧</button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
