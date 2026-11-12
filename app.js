@@ -73,8 +73,8 @@ const TRAJ = {
   sStart: 0.125,  // 出だし: 飛んでいる間ずっと同じ割合で進む分(放物線に見える)
   sCurve: 0.17,   // 曲がり。sRoot+sStartと同じにして、同じ強さ同士でターゲットに戻る
   curvePow: 2.6,  // 曲がりの効き始め(大きいほど後半から曲がる)
-  edgeLin: 0.38,  // 横のずれがここまでは素直に描く(画面幅に対する割合)
-  edgeMax: 0.47,  // ここより外には出さない。大きく曲がっても絵からはみ出さない
+  fitMax: 0.512,  // 横のずれの上限(画面幅に対する割合)。強+強の組み合わせで端まで届く
+  fitSoft: 0.7,   // 縮め方のゆるさ。単体の強は端の手前(約2/3)で止まる
   landS: 0.12,    // 落下地点の位置(0=地平線、1=ボールの位置)
   gPow: 1.15,     // 奥へ進む速さの変化(大きいほど手前で速く奥で遅い=遠近感)
   hScale: 0.7,    // 高さの大きさ
@@ -153,12 +153,11 @@ function drawTrajectory(canvas, shot, opts = {}) {
   const rawLat = (t) =>
     lv(start) * (TRAJ.sStart * t + TRAJ.sRoot * (1 - Math.pow(1 - t, 3)))
     + lv(curve) * TRAJ.sCurve * Math.pow(t, TRAJ.curvePow);
-  // 大きく曲がって絵からはみ出しそうなときは、形を保ったまま軌道全体の横幅を縮める
-  // (edgeLinまでは素直に描くので、弱・中・強の差は残る)
+  // 横に大きくずれる球ほど、形を保ったまま軌道全体の横幅を少しずつ縮める
+  // 単体の強は端の手前、強+強の組み合わせでちょうど端に届く
   let maxLat = 0;
   for (let i = 0; i <= 40; i++) maxLat = Math.max(maxLat, Math.abs(rawLat(i / 40)));
-  const k = TRAJ.edgeLin, L = TRAJ.edgeMax;
-  const fit = maxLat <= k ? 1 : (k + (L - k) * Math.tanh((maxLat - k) / (L - k))) / maxLat;
+  const fit = maxLat > 0 ? (TRAJ.fitMax * Math.tanh(maxLat / TRAJ.fitSoft)) / maxLat : 1;
   const groundAt = (t) => {
     return {
       x: cx + rawLat(t) * fit * W,
