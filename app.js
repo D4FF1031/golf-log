@@ -65,8 +65,21 @@ function shapeText(start, curve, height) {
 }
 
 // ===== 弾道の描画 =====
-// ゴルファーがボールの後ろから目標方向を見た景色(遠近法)
-// 地面上の点(横x, 奥行きz)と高さyを、奥ほど小さくなる係数sで画面に写す。
+// 軌道の形の調整値(放物線3)
+// 遠近法の正確さより「見てどんな球かわかること」を優先して、画面上で直接描いている
+const TRAJ = {
+  levels: [0, 1, 1.7, 2.3], // 弱・中・強の効き。弱を見やすく、強がはみ出しすぎないように
+  sRoot: 0.07,    // 出だし: 根元で角度をつける分(打ち出し直後に効き切る)
+  sStart: 0.11,   // 出だし: 飛んでいる間ずっと同じ割合で進む分(放物線に見える)
+  sCurve: 0.18,   // 曲がり。sRoot+sStartと同じにして、同じ強さ同士でターゲットに戻る
+  curvePow: 2.2,  // 曲がりの効き始め(大きいほど後半から曲がる)
+  edge: 0.45,     // 横のずれの上限(画面幅に対する割合)。大きく曲がっても絵からはみ出さない
+  landS: 0.12,    // 落下地点の位置(0=地平線、1=ボールの位置)
+  gPow: 1.6,      // 奥へ進む速さの変化(大きいほど手前で速く奥で遅い=遠近感)
+  hScale: 0.7,    // 高さの大きさ
+};
+
+// ゴルファーがボールの後ろから目標方向を見た景色
 function drawTrajectory(canvas, shot, opts = {}) {
   const dpr = window.devicePixelRatio || 1;
   const cssW = canvas.clientWidth || opts.width || 320;
@@ -120,57 +133,44 @@ function drawTrajectory(canvas, shot, opts = {}) {
   ctx.lineTo(W, horizonY);
   ctx.stroke();
 
-  // --- 投影 ---
-  const Z = 1;          // 落下地点までの奥行き(正規化)
-  // 奥行きは強めの遠近(落下地点が地平線近くに来る)、
-  // 高さと左右は弱めの遠近(軌道の形が読み取りやすい)にしている
-  const zGround = 0.12;
-  const zShape = 0.6;
-  const scaleAt = (z) => zGround / (zGround + z);
-  const shapeScaleAt = (z) => zShape / (zShape + z);
-  const project = (x, z, y) => {
-    const s = scaleAt(z);
-    const s2 = shapeScaleAt(z);
-    return {
-      x: cx + x * W * s2,
-      y: horizonY + (ballY - horizonY) * s - y * H * s2,
-    };
-  };
+  const landY = horizonY + (ballY - horizonY) * TRAJ.landS;
 
   // ターゲットライン(真っすぐの目安)
   ctx.strokeStyle = 'rgba(255,255,255,0.45)';
   ctx.setLineDash(small ? [2, 3] : [5, 6]);
   ctx.beginPath();
-  const tl0 = project(0, 0, 0), tl1 = project(0, Z * 40, 0);
-  ctx.moveTo(tl0.x, tl0.y);
-  ctx.lineTo(tl1.x, tl1.y);
+  ctx.moveTo(cx, ballY);
+  ctx.lineTo(cx, horizonY);
   ctx.stroke();
   ctx.setLineDash([]);
 
   // --- 軌道モデル ---
   const { start, curve, height } = shot;
-  // 横位置(地面上): 出だしは直線的な角度、曲がりはt^2で後半ほど効く
-  const startK = 0.15;    // 出だし1段階あたり
-  const curveK = 0.22;    // 曲がり1段階あたり
-  // 高さ: 頂点の高さと位置。高いほど頂点が高く早め、低いほど低く遅め
-  const apex = 0.5 * (1 + 0.2 * height);           // 正規化した頂点高さ
-  const tp = 0.58 - 0.035 * height;                  // 頂点の位置(0..1)
+  const lv = (v) => Math.sign(v) * TRAJ.levels[Math.abs(v)];
+  // 地面上の位置(=影)。t: 0=ボール、1=落下地点
+  const groundAt = (t) => {
+    const startPart = lv(start) * (TRAJ.sStart * t + TRAJ.sRoot * (1 - Math.pow(1 - t, 3)));
+    const curvePart = lv(curve) * TRAJ.sCurve * Math.pow(t, TRAJ.curvePow);
+    const m = TRAJ.edge * W;
+    return {
+      x: cx + m * Math.tanh(((startPart + curvePart) * W) / m),
+      y: ballY + (landY - ballY) * (1 - Math.pow(1 - t, TRAJ.gPow)),
+    };
+  };
+  // 高さ: 高いほど頂点が高く早め、低いほど低く遅め
+  const apex = 0.5 * (1 + 0.2 * height);
+  const tp = 0.58 - 0.035 * height;
+  const heightAt = (t) => {
+    if (t <= tp) { const u = t / tp; return apex * (1 - (1 - u) * (1 - u)); } // 上昇
+    const u = (t - tp) / (1 - tp); return apex * (1 - u * u);               // 下降
+  };
 
   const pts = [];
   const N = 60;
   for (let i = 0; i <= N; i++) {
     const t = i / N;
-    const z = t * Z;
-    const x = start * startK * t + curve * curveK * t * t;
-    let y;
-    if (t <= tp) {
-      const u = t / tp;
-      y = apex * (1 - (1 - u) * (1 - u));             // 上昇
-    } else {
-      const u = (t - tp) / (1 - tp);
-      y = apex * (1 - u * u);                          // 下降
-    }
-    pts.push(project(x, z, y));
+    const g = groundAt(t);
+    pts.push({ x: g.x, y: g.y - heightAt(t) * H * TRAJ.hScale });
   }
   const land = pts[pts.length - 1];
 
@@ -181,8 +181,7 @@ function drawTrajectory(canvas, shot, opts = {}) {
     ctx.beginPath();
     for (let i = 0; i <= N; i++) {
       const t = i / N;
-      const x = start * startK * t + curve * curveK * t * t;
-      const p = project(x, t * Z, 0);
+      const p = groundAt(t);
       if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
@@ -193,7 +192,7 @@ function drawTrajectory(canvas, shot, opts = {}) {
   ctx.lineCap = 'round';
   for (let i = 1; i < pts.length; i++) {
     const t = i / N;
-    const s = shapeScaleAt(t * Z);
+    const s = 0.6 / (0.6 + t);
     ctx.lineWidth = (small ? 1.2 : 2) + (small ? 1.8 : 4) * s;
     ctx.beginPath();
     ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
@@ -415,6 +414,6 @@ function init() {
 }
 
 // テスト用に公開
-window.__golf = { state, press, shapeText, drawTrajectory };
+window.__golf = { state, press, shapeText, drawTrajectory, TRAJ };
 
 init();
