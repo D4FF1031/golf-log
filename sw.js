@@ -1,5 +1,5 @@
 // 更新したら版番号を上げると、端末側のキャッシュが入れ替わります
-const CACHE = 'golf-log-v2';
+const CACHE = 'golf-log-v3';
 const FILES = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

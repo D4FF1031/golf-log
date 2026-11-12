@@ -68,15 +68,17 @@ function shapeText(start, curve, height) {
 // 軌道の形の調整値(放物線3)
 // 遠近法の正確さより「見てどんな球かわかること」を優先して、画面上で直接描いている
 const TRAJ = {
-  levels: [0, 1, 1.7, 2.3], // 弱・中・強の効き。弱を見やすく、強がはみ出しすぎないように
-  sRoot: 0.07,    // 出だし: 根元で角度をつける分(打ち出し直後に効き切る)
-  sStart: 0.11,   // 出だし: 飛んでいる間ずっと同じ割合で進む分(放物線に見える)
-  sCurve: 0.18,   // 曲がり。sRoot+sStartと同じにして、同じ強さ同士でターゲットに戻る
-  curvePow: 2.2,  // 曲がりの効き始め(大きいほど後半から曲がる)
-  edge: 0.45,     // 横のずれの上限(画面幅に対する割合)。大きく曲がっても絵からはみ出さない
+  levels: [0, 1, 2, 3], // 弱・中・強の効き(等間隔)
+  sRoot: 0.045,   // 出だし: 根元で角度をつける分(打ち出し直後に効き切る)
+  sStart: 0.125,  // 出だし: 飛んでいる間ずっと同じ割合で進む分(放物線に見える)
+  sCurve: 0.17,   // 曲がり。sRoot+sStartと同じにして、同じ強さ同士でターゲットに戻る
+  curvePow: 2.6,  // 曲がりの効き始め(大きいほど後半から曲がる)
+  edgeLin: 0.38,  // 横のずれがここまでは素直に描く(画面幅に対する割合)
+  edgeMax: 0.47,  // ここより外には出さない。大きく曲がっても絵からはみ出さない
   landS: 0.12,    // 落下地点の位置(0=地平線、1=ボールの位置)
-  gPow: 1.6,      // 奥へ進む速さの変化(大きいほど手前で速く奥で遅い=遠近感)
+  gPow: 1.15,     // 奥へ進む速さの変化(大きいほど手前で速く奥で遅い=遠近感)
   hScale: 0.7,    // 高さの大きさ
+  apexT: 0.5,     // 頂点の位置(0=ボール、1=落下地点)。小さいほど頂点が手前
 };
 
 // ゴルファーがボールの後ろから目標方向を見た景色
@@ -148,18 +150,24 @@ function drawTrajectory(canvas, shot, opts = {}) {
   const { start, curve, height } = shot;
   const lv = (v) => Math.sign(v) * TRAJ.levels[Math.abs(v)];
   // 地面上の位置(=影)。t: 0=ボール、1=落下地点
+  const rawLat = (t) =>
+    lv(start) * (TRAJ.sStart * t + TRAJ.sRoot * (1 - Math.pow(1 - t, 3)))
+    + lv(curve) * TRAJ.sCurve * Math.pow(t, TRAJ.curvePow);
+  // 大きく曲がって絵からはみ出しそうなときは、形を保ったまま軌道全体の横幅を縮める
+  // (edgeLinまでは素直に描くので、弱・中・強の差は残る)
+  let maxLat = 0;
+  for (let i = 0; i <= 40; i++) maxLat = Math.max(maxLat, Math.abs(rawLat(i / 40)));
+  const k = TRAJ.edgeLin, L = TRAJ.edgeMax;
+  const fit = maxLat <= k ? 1 : (k + (L - k) * Math.tanh((maxLat - k) / (L - k))) / maxLat;
   const groundAt = (t) => {
-    const startPart = lv(start) * (TRAJ.sStart * t + TRAJ.sRoot * (1 - Math.pow(1 - t, 3)));
-    const curvePart = lv(curve) * TRAJ.sCurve * Math.pow(t, TRAJ.curvePow);
-    const m = TRAJ.edge * W;
     return {
-      x: cx + m * Math.tanh(((startPart + curvePart) * W) / m),
+      x: cx + rawLat(t) * fit * W,
       y: ballY + (landY - ballY) * (1 - Math.pow(1 - t, TRAJ.gPow)),
     };
   };
   // 高さ: 高いほど頂点が高く早め、低いほど低く遅め
   const apex = 0.5 * (1 + 0.2 * height);
-  const tp = 0.58 - 0.035 * height;
+  const tp = TRAJ.apexT - 0.035 * height;
   const heightAt = (t) => {
     if (t <= tp) { const u = t / tp; return apex * (1 - (1 - u) * (1 - u)); } // 上昇
     const u = (t - tp) / (1 - tp); return apex * (1 - u * u);               // 下降
